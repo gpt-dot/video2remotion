@@ -1,0 +1,50 @@
+{
+  "source": {
+    "duration": 4.0,
+    "width": 960,
+    "height": 540,
+    "fps": 30.0,
+    "has_audio": false,
+    "video_codec": "h264",
+    "audio_codec": "",
+    "source": "in.mp4"
+  },
+  "scenes": [
+    {
+      "start": 0.0,
+      "end": 4.0,
+      "src": "frames/scene-000.jpg",
+      "kind": "title",
+      "text": "区域提取测试 图片区域应成区域视频 背景仍然由代码生成",
+      "title_lines": [
+        "区域提取测试",
+        "图片区域应成区域视频",
+        "背景仍然由代码生成"
+      ],
+      "area": 0.052370756172839525,
+      "motion": 0.08020354807376862,
+      "edges": 0.03085462562739849,
+      "transition": {
+        "type": "cut",
+        "duration": 0.0
+      },
+      "bg": "#07080a",
+      "accent": "#6f86a8"
+    }
+  ],
+  "timeline": {
+    "scenes": [
+      {
+        "id": "scene-000",
+        "from": 0,
+        "durationInFrames": 120,
+        "kind": "title",
+        "accent": "#6f86a8",
+        "transition": "cut",
+        "mode": "hybrid"
+      }
+    ],
+    "bpm": 0.0,
+    "beats": []
+  }
+}

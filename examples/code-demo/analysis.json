@@ -1,0 +1,138 @@
+{
+  "source": {
+    "duration": 13.0,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30.0,
+    "has_audio": true,
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "source": "aivideokit-媒体能力演示.remotion.mp4"
+  },
+  "scenes": [
+    {
+      "start": 0.0,
+      "end": 3.0,
+      "src": "frames/scene-000.jpg",
+      "kind": "title",
+      "text": "一份规格两种引擎 图片音频转场都由同一份 JSON 驱动",
+      "title_lines": [
+        "一份规格两种引擎",
+        "图片音频转场都由同一份 JSON 驱动"
+      ],
+      "area": 0.1632392939814815,
+      "motion": 0.17409619688987732,
+      "edges": 0.03482138365507126,
+      "transition": {
+        "type": "cut",
+        "duration": 0.0
+      },
+      "bg": "#07080b",
+      "accent": "#56beff"
+    },
+    {
+      "start": 3.0,
+      "end": 6.25,
+      "src": "frames/scene-001.jpg",
+      "kind": "live",
+      "text": "图片按 cover 铺满缓慢推近 (Ken Burns)",
+      "title_lines": [
+        "图片按 cover 铺满缓慢推近 (Ken Burns)"
+      ],
+      "area": 0.02528935185185185,
+      "motion": 0.11825501918792725,
+      "edges": 0.014908701181411743,
+      "transition": {
+        "type": "cut",
+        "duration": 0.0
+      },
+      "bg": "#07080a",
+      "accent": "#4e87f3"
+    },
+    {
+      "start": 6.25,
+      "end": 13.0,
+      "src": "frames/scene-002.jpg",
+      "kind": "slide",
+      "text": "体扩展的边界 图片构建时内联为 data URI， 两个引擎零配置 音频染后由 ffmpeg 混流不重编码画面",
+      "title_lines": [
+        "体扩展的边界",
+        "图片构建时内联为 data URI， 两个引擎零配置",
+        "音频染后由 ffmpeg 混流不重编码画面"
+      ],
+      "area": 0.15753858024691353,
+      "motion": 0.06805587559938431,
+      "edges": 0.041919272392988205,
+      "transition": {
+        "type": "cut",
+        "duration": 0.0
+      },
+      "bg": "#07080b",
+      "accent": "#56beff"
+    }
+  ],
+  "timeline": {
+    "scenes": [
+      {
+        "id": "scene-000",
+        "from": 0,
+        "durationInFrames": 90,
+        "kind": "title",
+        "accent": "#56beff",
+        "transition": "cut",
+        "mode": "graphic"
+      },
+      {
+        "id": "scene-001",
+        "from": 90,
+        "durationInFrames": 98,
+        "kind": "live",
+        "accent": "#4e87f3",
+        "transition": "cut",
+        "mode": "media"
+      },
+      {
+        "id": "scene-002",
+        "from": 188,
+        "durationInFrames": 202,
+        "kind": "slide",
+        "accent": "#56beff",
+        "transition": "cut",
+        "mode": "graphic"
+      }
+    ],
+    "bpm": 187.5,
+    "beats": [
+      6,
+      16,
+      31,
+      39,
+      46,
+      53,
+      70,
+      77,
+      102,
+      112,
+      127,
+      135,
+      144,
+      154,
+      167,
+      177,
+      185,
+      195,
+      208,
+      227,
+      238,
+      262,
+      269,
+      278,
+      287,
+      294,
+      302,
+      310,
+      323,
+      334
+    ]
+  }
+}

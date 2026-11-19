@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+examples/*/node_modules/
+examples/*/out/
+examples/*/package-lock.json

@@ -1,0 +1,50 @@
+{
+  "source": {
+    "duration": 4.0,
+    "width": 1920,
+    "height": 1080,
+    "fps": 30.0,
+    "has_audio": false,
+    "video_codec": "h264",
+    "audio_codec": "",
+    "source": "complex-src.mp4"
+  },
+  "scenes": [
+    {
+      "start": 0.0,
+      "end": 4.0,
+      "src": "frames/scene-000.jpg",
+      "kind": "slide",
+      "text": "复杂场景也能转成代码 图片区域自动拆成 MediaCard 文字位置颜色全部参数化",
+      "title_lines": [
+        "复杂场景也能转成代码",
+        "图片区域自动拆成 MediaCard",
+        "文字位置颜色全部参数化"
+      ],
+      "area": 0.0603858024691358,
+      "motion": 0.00038488052086904645,
+      "edges": 0.039989735931158066,
+      "transition": {
+        "type": "cut",
+        "duration": 0.0
+      },
+      "bg": "#07080a",
+      "accent": "#72829f"
+    }
+  ],
+  "timeline": {
+    "scenes": [
+      {
+        "id": "scene-000",
+        "from": 0,
+        "durationInFrames": 120,
+        "kind": "slide",
+        "accent": "#72829f",
+        "transition": "cut",
+        "mode": "hybrid"
+      }
+    ],
+    "bpm": 0.0,
+    "beats": []
+  }
+}
