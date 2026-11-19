@@ -39,7 +39,7 @@ import wave
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageFilter
+from PIL import Image, ImageFilter, ImageOps
 
 import code_engine
 
@@ -183,17 +183,123 @@ def extract_frame(path: Path, t: float, out: Path) -> None:
     ])
 
 
+# 允许出现的超短英文词（缺元音也可能是真实文字）
+_SHORT_WORDS = {
+    "AI", "UI", "UX", "TV", "VR", "AR", "MR", "XR", "3D", "4K", "8K", "HD", "UHD",
+    "OK", "ID", "QR", "PC", "APP", "API", "SDK", "JS", "TS", "CSS", "HTML", "PDF",
+    "CPU", "GPU", "RAM", "USB", "WIFI", "LTE", "GPS", "DIY", "VLOG", "MV", "IP",
+    "A", "I", "V", "X", "Y", "Z", "C", "R", "K", "S", "M", "B", "Q",
+}
+_CJK = re.compile(r"[\u4e00-\u9fff]")
+_ALNUM = re.compile(r"[0-9A-Za-z]")
+_VOWEL = re.compile(r"[AEIOUYaeiouy]")
+_WORD_BAD_CHAR = re.compile(r"[^0-9A-Za-z\u4e00-\u9fff&+.'’\-_]")
+
+
+def _word_ok(word: str) -> bool:
+    """判断 OCR 词是否像正常文字，过滤花字/照片纹理噪声。"""
+    clean = word.strip(".,:;!?()[]{}\"'“”‘’·•|/\\")
+    if not clean:
+        return False
+    if _CJK.search(clean):
+        return True
+    if not _ALNUM.search(clean):
+        return False
+    if _WORD_BAD_CHAR.search(clean):
+        return False
+    letters = re.sub(r"[^A-Za-z]", "", clean)
+    if not letters:
+        return True
+    if len(letters) == 1:
+        # 单字母只放行常见缩写；带数字的字母数字混合码（A890）不算
+        return clean.upper() in _SHORT_WORDS or bool(re.search(r"\d", clean))
+    if not _VOWEL.search(letters):
+        # 全辅音串（MLL / TSI / XKQ）基本是误识别
+        return clean.upper() in _SHORT_WORDS
+    return True
+
+
+def _clean_line(words: list[tuple[str, float]], conf: float) -> tuple[str, bool]:
+    """返回清洗后的整行文字，以及该行是否可信。"""
+    if not words:
+        return "", False
+    kept: list[str] = []
+    hard_bad = 0
+    for w, _c in words:
+        if _word_ok(w):
+            kept.append(w)
+        else:
+            letters = re.sub(r"[^A-Za-z]", "", w)
+            if len(letters) >= 3 and not _VOWEL.search(letters):
+                hard_bad += 1
+    ratio = len(kept) / len(words)
+    text = re.sub(r"\s+", " ", " ".join(kept)).strip()
+    # 中文被 tesseract 拆成单字时，去掉汉字之间的空格
+    text = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", text)
+    text = re.sub(r"^[\s\-–—:;,.|/]+|[\s\-–—:;,.|/]+$", "", text).strip()
+    useful = re.sub(r"[^\w\u4e00-\u9fff]", "", text)
+    if len(useful) < 2:
+        return "", False
+    if conf < 55 or ratio < 0.7:
+        return "", False
+    # 行内出现纯辅音长串，且可信词不足八成：整行按噪声丢弃
+    if hard_bad and ratio < 0.8:
+        return "", False
+    # 大量单字符碎片，典型的花字/纹理误识别（中文逐字切分不算）
+    singletons = sum(
+        1 for w, _c in words
+        if len(re.sub(r"\W", "", w)) <= 1 and not _CJK.search(w)
+    )
+    if len(words) >= 3 and singletons / len(words) > 0.4:
+        return "", False
+    # 全大写短行（型号/设备标签/花字误读）：元音太少且置信度不高就丢弃
+    if not _CJK.search(text):
+        tokens = text.split()
+        letters = "".join(re.sub(r"[^A-Za-z]", "", t) for t in tokens if not re.search(r"\d", t))
+        if (tokens and not any(c.islower() for c in text) and len(tokens) <= 3
+                and len(letters) >= 3 and len(_VOWEL.findall(letters)) / len(letters) < 0.34
+                and conf < 88):
+            return "", False
+    return text, True
+
+
+def _ocr_image(path: Path) -> tuple[Path, bool]:
+    """放大 + 灰度 + 锐化，提高小字/花字识别率。返回临时文件路径。"""
+    try:
+        im = Image.open(path).convert("L")
+        w, h = im.size
+        scale = max(1.0, 1600.0 / max(1, w))
+        if scale > 1.0:
+            im = im.resize((int(w * scale), int(h * scale)), Image.LANCZOS)
+        im = ImageOps.autocontrast(im, cutoff=1)
+        im = im.filter(ImageFilter.UnsharpMask(radius=1.2, percent=140, threshold=3))
+        fd, name = tempfile.mkstemp(suffix=".png")
+        os.close(fd)
+        im.save(name)
+        return Path(name), True
+    except Exception:
+        return path, False
+
+
 def ocr_details(path: Path, lang: str) -> dict:
     """返回文字、行框、文字面积占比。失败时返回空结构。"""
     empty = {"text": "", "lines": [], "title_lines": [], "area": 0.0, "conf": 0.0}
     if not shutil.which("tesseract"):
         return empty
+    ocr_path, is_temp = _ocr_image(path)
     try:
         p = run([
-            "tesseract", str(path), "stdout", "-l", lang, "--psm", "6", "tsv",
+            "tesseract", str(ocr_path), "stdout", "-l", lang, "--psm", "6",
+            "-c", "tessedit_char_blacklist=£¥€|<>{}[]~^©®™", "tsv",
         ], capture=True)
     except subprocess.CalledProcessError:
         return empty
+    finally:
+        if is_temp:
+            try:
+                ocr_path.unlink()
+            except OSError:
+                pass
     rows = list(csv.DictReader(io.StringIO(p.stdout or ""), delimiter="\t"))
     grouped: dict[tuple, dict] = {}
     for row in rows:
@@ -204,7 +310,7 @@ def ocr_details(path: Path, lang: str) -> dict:
             conf = float(row.get("conf") or -1)
         except ValueError:
             conf = -1
-        if conf < 35:
+        if conf < 45:
             continue
         useful = re.sub(r"[^\w\u4e00-\u9fff]", "", txt)
         if len(useful) < 1:
@@ -216,7 +322,7 @@ def ocr_details(path: Path, lang: str) -> dict:
         h = int(float(row.get("height") or 0))
         g = grouped.setdefault(key, {"words": [], "x0": left, "y0": top, "x1": left + w,
                                       "y1": top + h, "conf": []})
-        g["words"].append(txt)
+        g["words"].append((txt, conf))
         g["x0"] = min(g["x0"], left)
         g["y0"] = min(g["y0"], top)
         g["x1"] = max(g["x1"], left + w)
@@ -227,19 +333,24 @@ def ocr_details(path: Path, lang: str) -> dict:
         fw, fh = im.size
     lines = []
     for g in grouped.values():
-        text = re.sub(r"\s+", " ", " ".join(g["words"])).strip()
-        # 中文被 tesseract 拆成单字时，去掉汉字之间的空格
-        text = re.sub(r"(?<=[\u4e00-\u9fff])\s+(?=[\u4e00-\u9fff])", "", text)
-        text = re.sub(r'[\s"“”\'`\\|]+$', "", text).strip()
-        if len(re.sub(r"[^\w\u4e00-\u9fff]", "", text)) < 2:
+        conf = sum(g["conf"]) / len(g["conf"])
+        text, ok = _clean_line(g["words"], conf)
+        if not ok:
             continue
         lines.append({
             "text": text,
             "x0": g["x0"] / fw, "y0": g["y0"] / fh,
             "x1": g["x1"] / fw, "y1": g["y1"] / fh,
-            "conf": sum(g["conf"]) / len(g["conf"]),
+            "conf": conf,
         })
     lines.sort(key=lambda x: (x["y0"], x["x0"]))
+    # 去掉同一位置的重复行
+    deduped = []
+    for l in lines:
+        if any(l["text"] == q["text"] and abs(l["y0"] - q["y0"]) < 0.02 for q in deduped):
+            continue
+        deduped.append(l)
+    lines = deduped
     area = sum(max(0, l["x1"] - l["x0"]) * max(0, l["y1"] - l["y0"]) for l in lines)
     text = " ".join(l["text"] for l in lines[:3])[:120]
     return {
