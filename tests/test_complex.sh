@@ -27,7 +27,7 @@ PY
 ffmpeg -y -v error -loop 1 -i "$TMP/slide.png" -t 3 -r 30 -pix_fmt yuv420p "$TMP/in.mp4"
 
 python3 "$ROOT/video2remotion.py" "$TMP/in.mp4" -o "$TMP/out" \
-  --engine code --captions off --max-scenes 4 >/tmp/v2r-complex-smoke.log
+  --engine code --captions off --max-scenes 4 --no-ocr-fix >/tmp/v2r-complex-smoke.log
 
 test -f "$TMP/out/src/scenes/Scene000.tsx"
 grep -q "MediaCard" "$TMP/out/src/scenes/Scene000.tsx"

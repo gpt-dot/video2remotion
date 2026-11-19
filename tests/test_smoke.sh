@@ -9,7 +9,7 @@ ffmpeg -y -v error -f lavfi -i "testsrc=size=320x240:rate=30" -t 2 \
   -pix_fmt yuv420p "$TMP/input.mp4"
 
 python3 "$ROOT/video2remotion.py" "$TMP/input.mp4" -o "$TMP/out" \
-  --max-scenes 4 --threshold 0.6 --captions off >/tmp/v2r-smoke.log
+  --max-scenes 4 --threshold 0.6 --captions off --no-ocr-fix >/tmp/v2r-smoke.log
 
 test -f "$TMP/out/src/timeline.ts"
 test -f "$TMP/out/src/VideoFromFootage.tsx"

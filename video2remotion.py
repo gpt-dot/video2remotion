@@ -25,6 +25,7 @@ video2remotion v2 — 万能视频/图片转 Remotion 工程。
 from __future__ import annotations
 
 import argparse
+import base64
 import csv
 import io
 import json
@@ -35,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.request
 import wave
 from pathlib import Path
 
@@ -55,6 +57,12 @@ PRESETS = {
     "social": {"zoom": 1.25, "fade": 1.0, "caption": "bold", "pulse": 1.3, "letterbox": False},
     "minimal": {"zoom": 0.45, "fade": 0.7, "caption": "off", "pulse": 0.0, "letterbox": False},
 }
+
+# 多模态模型接口：用于 OCR 纠错。可用环境变量 V2R_LLM_URL / V2R_LLM_KEY 覆盖。
+LLM_URL = os.environ.get("V2R_LLM_URL", "https://bailucode.com/openapi/v1/messages")
+LLM_KEY = os.environ.get("V2R_LLM_KEY", "sk-a68a27f38e1cdbfa43012a6d2ca95e98")
+LLM_MODEL = os.environ.get("V2R_LLM_MODEL", "bailu-2.8-fast")
+LLM_TIMEOUT = 120
 
 
 def die(msg: str) -> None:
@@ -360,6 +368,87 @@ def ocr_details(path: Path, lang: str) -> dict:
         "area": min(1.0, area),
         "conf": float(np.mean([l["conf"] for l in lines])) if lines else 0.0,
     }
+
+
+def _frame_b64(path: Path, max_w: int = 1280) -> str:
+    im = Image.open(path).convert("RGB")
+    if im.width > max_w:
+        im = im.resize((max_w, max(1, int(im.height * max_w / im.width))), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=85)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+def _parse_json_array(text: str) -> list | None:
+    s = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.M).strip()
+    start, end = s.find("["), s.rfind("]")
+    if start < 0 or end <= start:
+        return None
+    try:
+        val = json.loads(s[start:end + 1])
+    except json.JSONDecodeError:
+        return None
+    return val if isinstance(val, list) else None
+
+
+def fix_ocr_lines(path: Path, lines: list[dict]) -> tuple[list[dict], bool]:
+    """把 OCR 行发给多模态模型纠错。返回 (行列表, 是否成功)。"""
+    if not lines:
+        return lines, False
+    try:
+        numbered = "\n".join(f"{i + 1}. {l['text']}" for i, l in enumerate(lines))
+        payload = {
+            "model": LLM_MODEL,
+            "reasoning_effort": "low",
+            "max_tokens": 8192,
+            "system": (
+                "你是 OCR 校对器。用户给出图片和按顺序编号的 OCR 文本行。"
+                "请结合图片纠正错字、乱码和错误断行，只保留图片中真实存在的文字；"
+                "某行若在图片中不存在或纯属噪声，输出空字符串。"
+                "只纠正识别错误，不要增删原句、不要翻译、不要润色改写、不要合并或拆分已有行。"
+                "只输出 JSON 数组，元素为字符串，长度必须等于输入行数，不要输出任何其他内容。"
+            ),
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64",
+                                                 "media_type": "image/jpeg",
+                                                 "data": _frame_b64(path)}},
+                    {"type": "text", "text": f"OCR 结果（共 {len(lines)} 行）：\n{numbered}"},
+                ],
+            }],
+        }
+        req = urllib.request.Request(
+            LLM_URL,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "User-Agent": "curl/8.5.0",
+                "Authorization": f"Bearer {LLM_KEY}",
+                "x-api-key": LLM_KEY,
+                "anthropic-version": "2023-06-01",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=LLM_TIMEOUT) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        raw = "".join(b.get("text", "") for b in data.get("content", []) if isinstance(b, dict))
+        arr = _parse_json_array(raw)
+        if not arr or len(arr) != len(lines):
+            return lines, False
+        out = []
+        for line, fixed in zip(lines, arr):
+            text = str(fixed).strip()
+            if not text:
+                continue
+            out.append({**line, "text": text})
+        # 全部行都被判为噪声时不可全信，回退原始结果
+        if not out:
+            return lines, False
+        return out, True
+    except Exception:
+        return lines, False
 
 
 def color_info(path: Path) -> tuple[str, str]:
@@ -783,6 +872,8 @@ def main() -> None:
     ap.add_argument("--sample-fps", type=float, default=4.0, help="采样帧率")
     ap.add_argument("--captions", choices=["off", "auto", "top", "bottom"], default="off")
     ap.add_argument("--lang", default="chi_sim+eng", help="OCR 语言包")
+    ap.add_argument("--no-ocr-fix", dest="ocr_fix", action="store_false",
+                    help="关闭多模态 OCR 纠错（默认开启，失败时自动回退原始 OCR）")
     ap.add_argument("--audio", help="图片/图片文件夹模式使用的音频")
     ap.add_argument("--image-duration", type=float, default=3.0, help="每张图片秒数")
     ap.add_argument("--no-audio", action="store_true", help="不提取音频")
@@ -853,6 +944,15 @@ def main() -> None:
                 frame_path = public_frames / f"scene-{i:03d}.jpg"
                 extract_frame(src, t, frame_path)
                 ocr = ocr_details(frame_path, args.lang)
+                if args.ocr_fix and ocr["lines"]:
+                    fixed, ok = fix_ocr_lines(frame_path, ocr["lines"])
+                    if ok:
+                        ocr["lines"] = fixed
+                        ocr["text"] = " ".join(l["text"] for l in fixed[:3])[:120]
+                        ocr["title_lines"] = [l["text"] for l in fixed[:3]][:3]
+                        ocr["area"] = min(1.0, sum(
+                            max(0, l["x1"] - l["x0"]) * max(0, l["y1"] - l["y0"])
+                            for l in fixed))
                 motion = motion_amount(samples, start, end, args.sample_fps)
                 edges = edge_density(frame_path)
                 kind = classify_scene(motion, ocr, edges)

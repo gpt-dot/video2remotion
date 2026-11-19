@@ -18,7 +18,7 @@ PY
 ffmpeg -y -v error -f lavfi -i "sine=frequency=220:duration=4" -c:a aac "$TMP/bgm.m4a"
 
 python3 "$ROOT/video2remotion.py" "$TMP/images" -o "$TMP/out" \
-  --audio "$TMP/bgm.m4a" --image-duration 2 --preset social >/tmp/v2r-image-smoke.log
+  --audio "$TMP/bgm.m4a" --image-duration 2 --preset social --no-ocr-fix >/tmp/v2r-image-smoke.log
 
 test -f "$TMP/out/src/timeline.ts"
 test -f "$TMP/out/public/audio/audio.m4a"

@@ -70,6 +70,7 @@ export const Scene000: React.FC = () => {
 - 镜头切点：低分辨率采样 + RGB 直方图差异
 - 场景分类：`title` / `slide` / `screen` / `live` / `static` / `image`
 - 文字布局：OCR 行框 → 标题、正文、段落、列表
+- **OCR 纠错**：本地规则先过滤花字/纹理噪声，再交给多模态模型按图纠正错字、乱码、错误断行
 - 字号：按 OCR 行高 + 文本长度/可用宽度双重约束，避免溢出
 - 颜色：背景主色/渐变、文字颜色、强调色
 - 色块：检测大面积、矩形度高的纯色区域，生成 `Panel`
@@ -139,6 +140,7 @@ python3 video2remotion.py input.mp4 -o out \
   --fps 30
   --width 1080 --height 1920
   --lang chi_sim+eng
+  --no-ocr-fix           # 关闭多模态 OCR 纠错（默认开启，失败自动回退）
   --no-audio
   --no-beat
 
@@ -146,6 +148,23 @@ python3 video2remotion.py input.mp4 -o out \
   --audio bgm.mp3
   --image-duration 3.0
 ```
+
+## OCR 纠错
+
+流水线是「本地过滤 → 多模态纠错」两步：
+
+1. `ocr_details()`：放大/灰度/锐化后跑 tesseract，再按置信度、词形、单字符碎片等规则过滤噪声。
+2. `fix_ocr_lines()`：把画面和 OCR 行一起发给多模态模型，按图纠正错字、乱码、错误断行；模型判定不存在的行会被丢弃。
+
+接口默认已内置，可用环境变量覆盖：
+
+```bash
+V2R_LLM_URL=https://bailucode.com/openapi/v1/messages
+V2R_LLM_KEY=sk-...
+V2R_LLM_MODEL=bailu-2.8-fast
+```
+
+请求失败、超时或返回格式不对时自动回退到原始 OCR，不影响生成流程；`--no-ocr-fix` 可完全关闭（离线/批量可显著提速）。
 
 ## 能力边界
 
@@ -160,7 +179,7 @@ python3 video2remotion.py input.mp4 -o out \
 
 - 像素级还原原片（那需要逐帧视频或生成模型）
 - 从零重建真实人物/复杂场景的像素内容
-- 100% 正确的 OCR（生成后可在 `SceneXXX.tsx` 里改字）
+- 100% 正确的 OCR（已有多模态纠错，生成后仍可在 `SceneXXX.tsx` 里改字）
 - 物体级跟踪、复杂的 3D 转场
 
 一句话：**文字和版式是代码，实拍是素材；结构和参数都可编辑。**
