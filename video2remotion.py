@@ -58,11 +58,24 @@ PRESETS = {
     "minimal": {"zoom": 0.45, "fade": 0.7, "caption": "off", "pulse": 0.0, "letterbox": False},
 }
 
-# 多模态模型接口：用于 OCR 纠错。可用环境变量 V2R_LLM_URL / V2R_LLM_KEY 覆盖。
+# 多模态模型接口：用于 OCR 纠错。
+# 密钥只从环境变量或本地 .llm-key 文件读取，不写进仓库。
 LLM_URL = os.environ.get("V2R_LLM_URL", "https://bailucode.com/openapi/v1/messages")
-LLM_KEY = os.environ.get("V2R_LLM_KEY", "sk-a68a27f38e1cdbfa43012a6d2ca95e98")
 LLM_MODEL = os.environ.get("V2R_LLM_MODEL", "bailu-2.8-fast")
 LLM_TIMEOUT = 120
+
+
+def _load_llm_key() -> str:
+    key = (os.environ.get("V2R_LLM_KEY") or "").strip()
+    if key:
+        return key
+    try:
+        return (ROOT / ".llm-key").read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+LLM_KEY = _load_llm_key()
 
 
 def die(msg: str) -> None:
@@ -393,7 +406,7 @@ def _parse_json_array(text: str) -> list | None:
 
 def fix_ocr_lines(path: Path, lines: list[dict]) -> tuple[list[dict], bool]:
     """把 OCR 行发给多模态模型纠错。返回 (行列表, 是否成功)。"""
-    if not lines:
+    if not lines or not LLM_KEY:
         return lines, False
     try:
         numbered = "\n".join(f"{i + 1}. {l['text']}" for i, l in enumerate(lines))

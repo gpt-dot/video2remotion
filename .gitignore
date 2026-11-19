@@ -1,5 +1,6 @@
 __pycache__/
 *.pyc
+.llm-key
 examples/*/node_modules/
 examples/*/out/
 examples/*/package-lock.json

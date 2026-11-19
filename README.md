@@ -156,11 +156,16 @@ python3 video2remotion.py input.mp4 -o out \
 1. `ocr_details()`：放大/灰度/锐化后跑 tesseract，再按置信度、词形、单字符碎片等规则过滤噪声。
 2. `fix_ocr_lines()`：把画面和 OCR 行一起发给多模态模型，按图纠正错字、乱码、错误断行；模型判定不存在的行会被丢弃。
 
-接口默认已内置，可用环境变量覆盖：
+接口地址和模型已内置；密钥不进仓库，按下面任一方式提供：
 
 ```bash
+# 方式一：环境变量
+export V2R_LLM_KEY=sk-...
+# 方式二：项目根目录放 .llm-key（已在 .gitignore 中）
+echo sk-... > .llm-key
+
+# 可选覆盖
 V2R_LLM_URL=https://bailucode.com/openapi/v1/messages
-V2R_LLM_KEY=sk-...
 V2R_LLM_MODEL=bailu-2.8-fast
 ```
 
